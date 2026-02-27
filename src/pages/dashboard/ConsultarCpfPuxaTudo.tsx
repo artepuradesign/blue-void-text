@@ -15,6 +15,7 @@ import PixQRCodeModal from '@/components/payment/PixQRCodeModal';
 import { usePixPaymentFlow } from '@/hooks/usePixPaymentFlow';
 import { useUserDataApi } from '@/hooks/useUserDataApi';
 import { API_BASE_URL } from '@/config/apiConfig';
+import QRCode from 'react-qr-code';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
@@ -769,6 +770,7 @@ const ConsultarCpfPuxaTudo: React.FC<ConsultarCpfPuxaTudoProps> = ({
   const [showInsufficientBalanceDialog, setShowInsufficientBalanceDialog] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(60);
   const [showRechargePixModal, setShowRechargePixModal] = useState(false);
+  const [rechargeToastId, setRechargeToastId] = useState<string | number | null>(null);
   const { loading: pixLoading, pixResponse, createPixPayment, checkPaymentStatus, generateNewPayment } = usePixPaymentFlow();
   const { userData } = useUserDataApi();
 
@@ -848,8 +850,10 @@ const ConsultarCpfPuxaTudo: React.FC<ConsultarCpfPuxaTudoProps> = ({
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (data?.data?.status === 'approved' && !cancelled) {
+          if (rechargeToastId) toast.dismiss(rechargeToastId);
           toast.success('🎉 Pagamento aprovado! Saldo creditado.');
           setShowRechargePixModal(false);
+          setRechargeToastId(null);
           reloadApiBalance();
         }
       } catch {}
@@ -2542,65 +2546,79 @@ Todos os direitos reservados.`;
             </Dialog>
             
             {/* Indicador de saldo insuficiente - Design moderno */}
-            {!hasSufficientBalance(finalPrice) && cpf.length === 11 && (() => {
+             {!hasSufficientBalance(finalPrice) && cpf.length === 11 && (() => {
               const missingAmount = Math.max(finalPrice - totalBalance, 0.01);
               return (
-                <div className="mt-3 rounded-xl border border-destructive/30 bg-gradient-to-br from-destructive/5 via-background to-destructive/10 dark:from-destructive/10 dark:via-background dark:to-destructive/15 overflow-hidden">
-                  {/* Header com gradiente */}
-                  <div className="px-4 py-3 bg-destructive/10 dark:bg-destructive/20 border-b border-destructive/20 flex items-center gap-2">
-                    <div className="p-1.5 rounded-full bg-destructive/20">
+                <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 dark:bg-destructive/10 overflow-hidden">
+                  <div className="px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <Wallet className="h-3.5 w-3.5 text-destructive" />
+                      <span className="text-xs font-semibold text-destructive">Saldo Insuficiente</span>
                     </div>
-                    <span className="text-sm font-semibold text-destructive">Saldo Insuficiente</span>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span>R$ {totalBalance.toFixed(2)} / R$ {finalPrice.toFixed(2)}</span>
+                    </div>
                   </div>
                   
-                  <div className="p-4 space-y-3">
-                    {/* Valores em grid */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg bg-muted/50 p-2.5 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Necessário</p>
-                        <p className="text-base font-bold text-foreground">R$ {finalPrice.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-lg bg-muted/50 p-2.5 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Disponível</p>
-                        <p className="text-base font-bold text-primary">R$ {totalBalance.toFixed(2)}</p>
-                      </div>
+                  <div className="px-3 pb-3 pt-1 flex items-center gap-3">
+                    <div className="flex-1 text-center rounded-md bg-primary/5 dark:bg-primary/10 border border-primary/20 py-1.5">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Faltam</p>
+                      <p className="text-sm font-extrabold text-primary">R$ {missingAmount.toFixed(2)}</p>
                     </div>
-
-                    {/* Detalhe dos saldos */}
-                    <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
-                      <span>Plano: R$ {planBalance.toFixed(2)}</span>
-                      <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
-                      <span>Carteira: R$ {walletBalance.toFixed(2)}</span>
-                    </div>
-
-                    {/* Valor faltante destacado */}
-                    <div className="rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/20 p-2.5 text-center">
-                      <p className="text-[10px] uppercase tracking-wider text-primary/70 font-medium">Faltam apenas</p>
-                      <p className="text-lg font-extrabold text-primary">R$ {missingAmount.toFixed(2)}</p>
-                    </div>
-
-                    {/* Botão Comprar Agora */}
                     <Button
                       onClick={async () => {
                         const pixData = await createPixPayment(missingAmount, userData);
                         if (pixData) {
                           setShowRechargePixModal(true);
+                          // Toast com QR Code embutido (mesmo padrão do AdicionarSaldo)
+                          const toastId = toast.info(
+                            <div className="flex items-center gap-3">
+                              {pixData.qr_code && (
+                                <div className="flex-shrink-0 bg-white p-1.5 rounded border-2 border-green-500">
+                                  <QRCode value={pixData.qr_code} size={70} />
+                                </div>
+                              )}
+                              <div className="space-y-1.5">
+                                <div>
+                                  <p className="font-semibold text-sm">PIX Criado</p>
+                                  <p className="text-xs text-muted-foreground">Escaneie ou copie o código</p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    toast.dismiss(toastId);
+                                    setShowRechargePixModal(false);
+                                    toast.info('Pagamento cancelado');
+                                  }}
+                                  className="text-[10px] px-2 py-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>,
+                            {
+                              duration: Infinity,
+                              action: {
+                                label: 'Ver QR Code',
+                                onClick: () => setShowRechargePixModal(true)
+                              },
+                            }
+                          );
+                          setRechargeToastId(toastId);
                         }
                       }}
                       disabled={pixLoading}
-                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-lg shadow-green-600/25 transition-all duration-200"
-                      size="lg"
+                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-md"
+                      size="sm"
                     >
                       {pixLoading ? (
-                        <div className="flex items-center gap-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                          Gerando PIX...
+                        <div className="flex items-center gap-1.5">
+                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                          <span className="text-xs">Gerando...</span>
                         </div>
                       ) : (
                         <>
-                          <ShoppingCart className="mr-2 h-4 w-4" />
-                          Comprar Agora — R$ {missingAmount.toFixed(2)}
+                          <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
+                          <span className="text-xs">Comprar Agora</span>
                         </>
                       )}
                     </Button>
