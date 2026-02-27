@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { loadCustomModules, loadSystemPanels, type CustomModule, type SystemPanel } from '@/utils/personalizationStorage';
 // ModuleCard antigo removido - agora usamos apenas ModuleCardTemplates
 import EmptyState from '../ui/empty-state';
-import { Lock, Package, Settings } from 'lucide-react';
+import { Lock, Package, Settings, Eye, ShoppingCart } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import ModuleCardTemplates from '@/components/configuracoes/personalization/ModuleCardTemplates';
 import { calculateDiscountedPrice } from '@/utils/planUtils';
@@ -360,8 +360,9 @@ const ModulesGrid: React.FC<ModulesGridProps> = ({ currentPlan, onModuleClick, p
              const { finalPrice, discount, discountAmount } = calculateDiscountedPrice(originalPrice, currentPlan, panelId);
              const hasDiscount = discount > 0;
              
-             // Verificar se tem saldo suficiente
-             const hasSufficientBalance = !hasLoadedOnce || isBalanceLoading ? true : totalAvailableBalance >= finalPrice;
+              // Verificar se tem saldo suficiente
+              const hasSufficientBalance = !hasLoadedOnce || isBalanceLoading ? true : totalAvailableBalance >= finalPrice;
+              const userHasRecordsInModule = hasRecordsInModule(module.path);
             
              return (
                <div 
@@ -380,8 +381,20 @@ const ModulesGrid: React.FC<ModulesGridProps> = ({ currentPlan, onModuleClick, p
                   </div>
                 )}
 
-                {/* Overlay para saldo insuficiente */}
-                {module.operationalStatus !== 'off' && !hasSufficientBalance && (
+                {/* Overlay para saldo insuficiente - COM histórico (pode entrar para visualizar) */}
+                {module.operationalStatus !== 'off' && !hasSufficientBalance && userHasRecordsInModule && (
+                  <div className="absolute inset-0 bg-black/50 dark:bg-black/70 rounded-lg z-10 flex items-center justify-center backdrop-blur-sm">
+                    <div className="text-center text-white space-y-1">
+                      <Eye className="h-7 w-7 mx-auto mb-1 text-green-400" />
+                      <p className="text-sm font-medium">Visualizar</p>
+                      <ShoppingCart className="h-5 w-5 mx-auto text-yellow-400" />
+                      <p className="text-[10px] opacity-80">Comprar para nova consulta</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Overlay para saldo insuficiente - SEM histórico (bloqueado) */}
+                {module.operationalStatus !== 'off' && !hasSufficientBalance && !userHasRecordsInModule && (
                   <div className="absolute inset-0 bg-red-900/60 dark:bg-red-900/80 rounded-lg z-10 flex items-center justify-center backdrop-blur-sm">
                     <div className="text-center text-white">
                       <Lock className="h-8 w-8 mx-auto mb-2" />
