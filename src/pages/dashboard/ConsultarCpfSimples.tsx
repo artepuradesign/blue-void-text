@@ -1663,22 +1663,8 @@ const ConsultarCpfPuxaTudo = () => {
         
         // Se o saldo é insuficiente para uma nova consulta (menos que o preço do módulo)
         if (newTotalBalance < finalPrice) {
-          console.log('⚠️ [HANDLE_SEARCH] Saldo insuficiente para nova consulta. Ativando notificação...');
+          console.log('⚠️ [HANDLE_SEARCH] Saldo insuficiente para nova consulta. Exibindo aviso...');
           setShowInsufficientBalanceDialog(true);
-          setRedirectCountdown(60);
-          
-          // Iniciar countdown de 60 segundos
-          let countdown = 60;
-          const countdownInterval = setInterval(() => {
-            countdown--;
-            setRedirectCountdown(countdown);
-            
-            if (countdown <= 0) {
-              clearInterval(countdownInterval);
-              console.log('⏱️ [HANDLE_SEARCH] Countdown finalizado. Redirecionando para /dashboard');
-              navigate('/dashboard');
-            }
-          }, 1000);
         }
         
       } else {
@@ -2745,7 +2731,7 @@ Todos os direitos reservados.`;
                   📋 Sua consulta está salva!
                 </p>
                 <p className="text-xs text-blue-700 dark:text-blue-300">
-                  Você pode visualizar o histórico completo das suas consultas a qualquer momento.
+                  Você pode continuar visualizando seus resultados e histórico de consultas a qualquer momento.
                 </p>
               </div>
 
@@ -2753,12 +2739,11 @@ Todos os direitos reservados.`;
                 <Button
                   onClick={() => {
                     setShowInsufficientBalanceDialog(false);
-                    navigate('/dashboard/historico');
+                    navigate('/dashboard/adicionar-saldo?fromModule=true');
                   }}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-green-600 hover:bg-green-700"
                 >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Ver Histórico de Consultas
+                  💰 Adicionar Saldo
                 </Button>
                 
                 <Button
@@ -2768,12 +2753,6 @@ Todos os direitos reservados.`;
                 >
                   Continuar Visualizando
                 </Button>
-              </div>
-
-              <div className="text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Redirecionando automaticamente em <span className="font-bold text-purple-600">{redirectCountdown}s</span>
-                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
