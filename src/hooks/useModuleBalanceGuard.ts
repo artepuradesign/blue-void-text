@@ -94,9 +94,15 @@ export const useModuleBalanceGuard = (moduleSlug: string) => {
       : parseFloat(module.price?.toString().replace(',', '.') || '0')
   ) : 0;
 
+  const hasEnoughBalance = module ? totalAvailableBalance >= requiredPrice : false;
+
   return {
     module,
     isAuthorized: !!module && module.is_active && module.operational_status === 'on',
-    hasValidBalance: module ? (totalAvailableBalance >= requiredPrice || userHasRecords) : false
+    hasValidBalance: hasEnoughBalance || userHasRecords,
+    /** Usuário pode entrar mas só visualizar histórico (sem saldo, mas com registros) */
+    isReadOnly: !hasEnoughBalance && userHasRecords,
+    hasEnoughBalance,
+    userHasRecords,
   };
 };
