@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { moduleHistoryService } from '@/services/moduleHistoryService';
 
@@ -12,7 +12,9 @@ export const useModuleRecords = () => {
   const { user } = useAuth();
   const [modulesWithRecords, setModulesWithRecords] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [checkedRoutes, setCheckedRoutes] = useState<Set<string>>(new Set());
 
+  // Carregar cache do localStorage na inicialização
   useEffect(() => {
     if (!user) {
       setIsLoading(false);
@@ -21,66 +23,79 @@ export const useModuleRecords = () => {
 
     const cacheKey = `module_records_${user.id}`;
 
-    // Carregar cache do localStorage
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
-        const parsed = JSON.parse(cached) as { routes: string[]; ts: number };
+        const parsed = JSON.parse(cached) as { routes: string[]; checked: string[]; ts: number };
         // Cache válido por 5 minutos
         if (Date.now() - parsed.ts < 5 * 60 * 1000) {
           setModulesWithRecords(new Set(parsed.routes));
+          setCheckedRoutes(new Set(parsed.checked || []));
           setIsLoading(false);
           return;
         }
       }
     } catch { /* ignore */ }
 
-    // Rotas dos módulos QRCode que devem ser verificados
-    const qrcodeRoutes = [
-      '/dashboard/qrcode-rg-6m',
-      '/dashboard/qrcode-rg-3m',
-      '/dashboard/qrcode-rg-1m',
-    ];
-
-    const checkRecords = async () => {
-      const routesWithRecords: string[] = [];
-
-      await Promise.all(
-        qrcodeRoutes.map(async (route) => {
-          try {
-            const stats = await moduleHistoryService.getStats(route);
-            if (stats.success && stats.data.total > 0) {
-              routesWithRecords.push(route);
-            }
-          } catch {
-            // Silenciar erros - não bloquear por falha de verificação
-          }
-        })
-      );
-
-      setModulesWithRecords(new Set(routesWithRecords));
-      setIsLoading(false);
-
-      // Salvar cache
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify({ routes: routesWithRecords, ts: Date.now() }));
-      } catch { /* ignore */ }
-    };
-
-    checkRecords();
+    setIsLoading(false);
   }, [user]);
 
   /**
-   * Verifica se o módulo na rota informada possui registros do usuário.
+   * Verifica uma rota específica sob demanda (lazy check).
    */
-  const hasRecordsInModule = (moduleRoute: string): boolean => {
+  const checkRouteRecords = useCallback(async (route: string) => {
+    if (!user || checkedRoutes.has(route)) return;
+
+    // Marcar como já verificada para evitar chamadas duplicadas
+    setCheckedRoutes(prev => {
+      const next = new Set(prev);
+      next.add(route);
+      return next;
+    });
+
+    try {
+      const stats = await moduleHistoryService.getStats(route);
+      if (stats.success && stats.data.total > 0) {
+        setModulesWithRecords(prev => {
+          const next = new Set(prev);
+          next.add(route);
+
+          // Atualizar cache
+          if (user) {
+            try {
+              const allChecked = new Set(checkedRoutes);
+              allChecked.add(route);
+              localStorage.setItem(
+                `module_records_${user.id}`,
+                JSON.stringify({ routes: Array.from(next), checked: Array.from(allChecked), ts: Date.now() })
+              );
+            } catch { /* ignore */ }
+          }
+
+          return next;
+        });
+      }
+    } catch {
+      // Silenciar erros
+    }
+  }, [user, checkedRoutes]);
+
+  /**
+   * Verifica se o módulo na rota informada possui registros do usuário.
+   * Também dispara verificação lazy se ainda não foi checada.
+   */
+  const hasRecordsInModule = useCallback((moduleRoute: string): boolean => {
+    // Disparar verificação lazy se ainda não foi checada
+    if (!checkedRoutes.has(moduleRoute)) {
+      checkRouteRecords(moduleRoute);
+    }
     return modulesWithRecords.has(moduleRoute);
-  };
+  }, [modulesWithRecords, checkedRoutes, checkRouteRecords]);
 
   /**
    * Marca manualmente um módulo como tendo registros (após criação de novo registro).
    */
-  const markModuleWithRecords = (moduleRoute: string) => {
+  const markModuleWithRecords = useCallback((moduleRoute: string) => {
     setModulesWithRecords(prev => {
       const next = new Set(prev);
       next.add(moduleRoute);
@@ -90,14 +105,14 @@ export const useModuleRecords = () => {
         try {
           localStorage.setItem(
             `module_records_${user.id}`,
-            JSON.stringify({ routes: Array.from(next), ts: Date.now() })
+            JSON.stringify({ routes: Array.from(next), checked: Array.from(checkedRoutes), ts: Date.now() })
           );
         } catch { /* ignore */ }
       }
 
       return next;
     });
-  };
+  }, [user, checkedRoutes]);
 
   return { hasRecordsInModule, markModuleWithRecords, isLoading };
 };
