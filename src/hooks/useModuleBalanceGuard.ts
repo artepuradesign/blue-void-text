@@ -74,6 +74,19 @@ export const useModuleBalanceGuard = (moduleSlug: string) => {
       return;
     }
 
+    // Usuário tem registros mas sem saldo - permitir acesso em modo leitura
+    if (totalAvailableBalance < finalPrice && userHasRecords) {
+      console.log('📖 [MODULE_BALANCE_GUARD] Acesso em modo leitura (com histórico, sem saldo):', {
+        moduleSlug,
+        moduleName: module.title,
+      });
+      toast.info(
+        `Você pode visualizar seu histórico em ${module.title}, mas precisa de saldo para novas consultas.`,
+        { duration: 4000 }
+      );
+      return;
+    }
+
     console.log('✅ [MODULE_BALANCE_GUARD] Acesso autorizado ao módulo:', {
       moduleSlug,
       moduleName: module.title,
