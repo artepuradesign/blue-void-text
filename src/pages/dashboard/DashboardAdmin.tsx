@@ -50,12 +50,12 @@ const DashboardAdmin = () => {
 
   // Saldo em Caixa = soma de TODAS as entradas (recargas, planos, consultas, compra_modulo, compra_login, entrada)
   const calculatedCashBalance = transactions
-    .filter(t => ['recarga', 'plano', 'compra_modulo', 'entrada', 'consulta', 'compra_login'].includes(t.type) && t.amount > 0)
+    .filter(t => ['recarga', 'plano', 'compra_modulo', 'entrada', 'consulta', 'compra_login'].includes(t.type))
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
   const adjustedStats = stats ? {
     ...stats,
-    cash_balance: stats.cash_balance || calculatedCashBalance || ((stats.payment_pix || 0) + (stats.payment_card || 0) + (stats.payment_paypal || 0)),
+    cash_balance: calculatedCashBalance || stats.cash_balance || ((stats.payment_pix || 0) + (stats.payment_card || 0) + (stats.payment_paypal || 0)),
     total_recharges: calculatedRecharges || stats.total_recharges,
     total_referrals: calculatedReferrals || stats.total_referrals,
     total_commissions: calculatedCommissions || stats.total_commissions
