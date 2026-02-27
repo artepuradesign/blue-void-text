@@ -9,8 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Progress } from '@/components/ui/progress';
 import { 
   User, Search, AlertCircle, CheckCircle, Download, Settings, Crown, FileText, 
-  Camera, DollarSign, TrendingUp, Award, Shield, Target, AlertTriangle, Info, Copy, Phone
+  Camera, DollarSign, TrendingUp, Award, Shield, Target, AlertTriangle, Info, Copy, Phone, ShoppingCart, Wallet
 } from 'lucide-react';
+import PixQRCodeModal from '@/components/payment/PixQRCodeModal';
+import { usePixPaymentFlow } from '@/hooks/usePixPaymentFlow';
+import { useUserDataApi } from '@/hooks/useUserDataApi';
+import { API_BASE_URL } from '@/config/apiConfig';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
@@ -764,6 +768,9 @@ const ConsultarCpfPuxaTudo: React.FC<ConsultarCpfPuxaTudoProps> = ({
   const [consultationDialogOpen, setConsultationDialogOpen] = useState(false);
   const [showInsufficientBalanceDialog, setShowInsufficientBalanceDialog] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(60);
+  const [showRechargePixModal, setShowRechargePixModal] = useState(false);
+  const { loading: pixLoading, pixResponse, createPixPayment, checkPaymentStatus, generateNewPayment } = usePixPaymentFlow();
+  const { userData } = useUserDataApi();
 
   const [conditionalChargePending, setConditionalChargePending] = useState<null | {
     cpf: string;
@@ -827,6 +834,31 @@ const ConsultarCpfPuxaTudo: React.FC<ConsultarCpfPuxaTudoProps> = ({
   
   // Hook para saldo da API externa
   const { balance, loadBalance: reloadApiBalance } = useWalletBalance();
+
+  // Auto-checagem de pagamento PIX para recarga rápida
+  useEffect(() => {
+    if (!showRechargePixModal || !pixResponse?.payment_id) return;
+    let cancelled = false;
+
+    const checkLive = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/mercadopago/check-payment-status-live.php?payment_id=${pixResponse.payment_id}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data?.data?.status === 'approved' && !cancelled) {
+          toast.success('🎉 Pagamento aprovado! Saldo creditado.');
+          setShowRechargePixModal(false);
+          reloadApiBalance();
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(checkLive, 4000);
+    checkLive();
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [showRechargePixModal, pixResponse?.payment_id]);
   
   // Hook para verificar assinatura e descontos
   const { 
@@ -2509,34 +2541,73 @@ Todos os direitos reservados.`;
               </DialogContent>
             </Dialog>
             
-            {/* Indicador de saldo insuficiente */}
-            {!hasSufficientBalance(finalPrice) && cpf.length === 11 && (
-              <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg space-y-3">
-                <div className="flex items-start text-red-700 dark:text-red-300">
-                  <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs sm:text-sm block break-words">
-                      Saldo insuficiente. Necessário: R$ {finalPrice.toFixed(2)}
-                    </span>
-                    <span className="text-xs sm:text-sm block break-words">
-                      Disponível: R$ {totalBalance.toFixed(2)}
-                    </span>
+            {/* Indicador de saldo insuficiente - Design moderno */}
+            {!hasSufficientBalance(finalPrice) && cpf.length === 11 && (() => {
+              const missingAmount = Math.max(finalPrice - totalBalance, 0.01);
+              return (
+                <div className="mt-3 rounded-xl border border-destructive/30 bg-gradient-to-br from-destructive/5 via-background to-destructive/10 dark:from-destructive/10 dark:via-background dark:to-destructive/15 overflow-hidden">
+                  {/* Header com gradiente */}
+                  <div className="px-4 py-3 bg-destructive/10 dark:bg-destructive/20 border-b border-destructive/20 flex items-center gap-2">
+                    <div className="p-1.5 rounded-full bg-destructive/20">
+                      <Wallet className="h-3.5 w-3.5 text-destructive" />
+                    </div>
+                    <span className="text-sm font-semibold text-destructive">Saldo Insuficiente</span>
+                  </div>
+                  
+                  <div className="p-4 space-y-3">
+                    {/* Valores em grid */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Necessário</p>
+                        <p className="text-base font-bold text-foreground">R$ {finalPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Disponível</p>
+                        <p className="text-base font-bold text-primary">R$ {totalBalance.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    {/* Detalhe dos saldos */}
+                    <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+                      <span>Plano: R$ {planBalance.toFixed(2)}</span>
+                      <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                      <span>Carteira: R$ {walletBalance.toFixed(2)}</span>
+                    </div>
+
+                    {/* Valor faltante destacado */}
+                    <div className="rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/20 p-2.5 text-center">
+                      <p className="text-[10px] uppercase tracking-wider text-primary/70 font-medium">Faltam apenas</p>
+                      <p className="text-lg font-extrabold text-primary">R$ {missingAmount.toFixed(2)}</p>
+                    </div>
+
+                    {/* Botão Comprar Agora */}
+                    <Button
+                      onClick={async () => {
+                        const pixData = await createPixPayment(missingAmount, userData);
+                        if (pixData) {
+                          setShowRechargePixModal(true);
+                        }
+                      }}
+                      disabled={pixLoading}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-lg shadow-green-600/25 transition-all duration-200"
+                      size="lg"
+                    >
+                      {pixLoading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          Gerando PIX...
+                        </div>
+                      ) : (
+                        <>
+                          <ShoppingCart className="mr-2 h-4 w-4" />
+                          Comprar Agora — R$ {missingAmount.toFixed(2)}
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
-                <div className="text-xs text-red-600 dark:text-red-400 break-words">
-                  Saldo do plano: R$ {planBalance.toFixed(2)} | Saldo da carteira: R$ {walletBalance.toFixed(2)}
-                </div>
-                <Button
-                  onClick={() => navigate('/dashboard/historico')}
-                  variant="outline"
-                  size="sm"
-                  className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                >
-                  <FileText className="mr-2 h-3 w-3" />
-                  Ver Histórico de Consultas
-                </Button>
-              </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -3807,6 +3878,26 @@ Todos os direitos reservados.`;
           </AlertDialogHeader>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal PIX para recarga rápida */}
+      <PixQRCodeModal
+        isOpen={showRechargePixModal}
+        onClose={() => setShowRechargePixModal(false)}
+        amount={Math.max(finalPrice - totalBalance, 0.01)}
+        onPaymentConfirm={async () => {
+          if (pixResponse?.payment_id) {
+            const status = await checkPaymentStatus(pixResponse.payment_id);
+            if (status === 'approved') {
+              setShowRechargePixModal(false);
+              reloadApiBalance();
+              toast.success('Saldo creditado! Agora você pode consultar.');
+            }
+          }
+        }}
+        isProcessing={false}
+        pixData={pixResponse}
+        onGenerateNew={() => generateNewPayment(Math.max(finalPrice - totalBalance, 0.01), userData)}
+      />
 
       {/* Scroll to Top Button */}
       <ScrollToTop />
