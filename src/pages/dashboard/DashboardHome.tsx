@@ -13,6 +13,7 @@ import { Panel } from '@/utils/apiService';
 import { useApiAccessLogs } from '@/hooks/useApiAccessLogs';
 import { useUserSubscription } from '@/hooks/useUserSubscription';
 import * as Icons from 'lucide-react';
+import { useModuleRecords } from '@/hooks/useModuleRecords';
 
 import PanelsGrid from '@/components/dashboard/PanelsGrid';
 
@@ -26,6 +27,7 @@ const DashboardHome = () => {
   const location = useLocation();
   const { signOut, user, isSupport } = useAuth();
   const { logPageAccess } = useApiAccessLogs();
+  const { hasRecordsInModule } = useModuleRecords();
   const { panels, isLoading: panelsLoading } = useApiPanels();
   const { 
     hasActiveSubscription, 
@@ -170,7 +172,10 @@ const DashboardHome = () => {
       totalAvailableBalance
     });
     
-    if (totalAvailableBalance < finalPrice) {
+    // Verificar se o usuário tem registros no módulo
+    const userHasRecords = hasRecordsInModule(path);
+
+    if (totalAvailableBalance < finalPrice && !userHasRecords) {
       const remaining = Math.max(finalPrice - totalAvailableBalance, 0.01);
       const priceDisplay = hasDiscount 
         ? `${finalPrice.toFixed(2)} (com ${discountPercentage}% de desconto)`
@@ -186,6 +191,13 @@ const DashboardHome = () => {
         }
       );
       return;
+    }
+
+    if (totalAvailableBalance < finalPrice && userHasRecords) {
+      toast.info(
+        `Você pode visualizar seu histórico em ${moduleName}, mas precisa de saldo para novas consultas.`,
+        { duration: 4000 }
+      );
     }
 
     navigate(path);

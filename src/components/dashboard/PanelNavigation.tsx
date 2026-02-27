@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModuleRecords } from '@/hooks/useModuleRecords';
 
 interface PanelNavigationProps {
   calculateTotalAvailableBalance: () => number;
@@ -11,23 +12,24 @@ interface PanelNavigationProps {
 const PanelNavigation = ({ calculateTotalAvailableBalance, painelId }: PanelNavigationProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { hasRecordsInModule } = useModuleRecords();
 
   const checkBalanceAndNavigate = (path: string, moduleName: string, modulePrice: string) => {
     if (!user) return;
 
     const price = parseFloat(modulePrice);
-    
-    // Usar saldo total disponível (mesmo da carteira digital)
     const totalAvailableBalance = calculateTotalAvailableBalance();
+    const userHasRecords = hasRecordsInModule(path);
     
     console.log('PanelNavigation - Verificando saldo para navegação:', {
       moduleName,
       price,
       totalAvailableBalance,
-      painelId
+      painelId,
+      userHasRecords
     });
     
-    if (totalAvailableBalance < price) {
+    if (totalAvailableBalance < price && !userHasRecords) {
       const remaining = Math.max(price - totalAvailableBalance, 0.01);
       toast.error(
         `Saldo insuficiente para ${moduleName}! Valor necessário: R$ ${price.toFixed(2)}`,
@@ -39,6 +41,13 @@ const PanelNavigation = ({ calculateTotalAvailableBalance, painelId }: PanelNavi
         }
       );
       return;
+    }
+
+    if (totalAvailableBalance < price && userHasRecords) {
+      toast.info(
+        `Você pode visualizar seu histórico em ${moduleName}, mas precisa de saldo para novas consultas.`,
+        { duration: 4000 }
+      );
     }
 
     navigate(path);

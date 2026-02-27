@@ -12,6 +12,7 @@ import { calculateDiscountedPrice } from '@/utils/planUtils';
 import { useUserBalance } from '@/hooks/useUserBalance';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModuleRecords } from '@/hooks/useModuleRecords';
 
 // Tipo para módulos da API
 interface ApiModule {
@@ -52,6 +53,7 @@ const ModulesGrid: React.FC<ModulesGridProps> = ({ currentPlan, onModuleClick, p
   const [isDarkMode, setIsDarkMode] = useState(false);
   const { totalAvailableBalance, isLoading: isBalanceLoading, hasLoadedOnce, loadTotalAvailableBalance } = useUserBalance();
   const { user } = useAuth();
+  const { hasRecordsInModule } = useModuleRecords();
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -230,7 +232,11 @@ const ModulesGrid: React.FC<ModulesGridProps> = ({ currentPlan, onModuleClick, p
       currentPlan
     });
     
-    if (totalAvailableBalance < finalPrice) {
+    // Verificar se o usuário tem registros no módulo
+    const moduleRoute = module.path;
+    const userHasRecords = hasRecordsInModule(moduleRoute);
+
+    if (totalAvailableBalance < finalPrice && !userHasRecords) {
       toast.error(
         `Saldo insuficiente para ${module.title}! Valor necessário: R$ ${finalPrice.toFixed(2)}`,
         {
@@ -241,6 +247,13 @@ const ModulesGrid: React.FC<ModulesGridProps> = ({ currentPlan, onModuleClick, p
         }
       );
       return;
+    }
+
+    if (totalAvailableBalance < finalPrice && userHasRecords) {
+      toast.info(
+        `Você pode visualizar seu histórico em ${module.title}, mas precisa de saldo para novas consultas.`,
+        { duration: 4000 }
+      );
     }
 
     onModuleClick(module.path, module.title, finalPrice.toString());
